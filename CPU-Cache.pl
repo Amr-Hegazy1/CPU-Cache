@@ -100,7 +100,7 @@ fillZeros(String,N,R) :-
 
 getDataFromCache(Tag,Idx,[item(tag(Tag),data(Data),1,_)|_],Data,Idx).
 
-getDataFromCache(Tag,Idx,[item(tag(Tag1),_,_,_)|T],Data,C) :-
+getDataFromCache(Tag,Idx,[_|T],Data,C) :-
     Idx \= C,
     C1 is C + 1,
     getDataFromCache(Tag,Idx,T,Data,C1).
@@ -193,7 +193,7 @@ replaceInCache(Tag,_,Mem,[item(Ta,D,I,O)|T],NewCache,ItemData,fullyAssoc,_) :-
 
 
 
-replaceInCacheInInvalid(Tag,[item(tag(Tag1),_,0,O)|T],[item(tag(TagF),data(ItemData),1,0)|T],ItemData) :- 
+replaceInCacheInInvalid(Tag,[item(tag(Tag1),_,0,_)|T],[item(tag(TagF),data(ItemData),1,0)|T],ItemData) :- 
     atom_length(Tag,TagN),
     atom_length(Tag1,Tag1N),
     TF is Tag1N - TagN,
@@ -257,6 +257,119 @@ adjust_orders([item(Ta,data(Data),0,O)|TC],ItemData,[item(Ta,data(Data),0,O)|TNC
 
 % ------------------------------FULLY ASSOCIATIVE-----------------------------------------------
 
+% ------------------------------SET ASSOCIATIVE-----------------------------------------------
+
+getDataFromCache(StringAddress,OldCache,Data,AddressDec,setAssoc,SetsNum) :-
+
+    atom_number(StringAddress,AddressBin),
+    convertBinToDec(AddressBin,AddressDec),
+    
+    convertAddress(AddressBin,SetsNum,Tag,Idx,setAssoc),
+    convertBinToDec(Idx,IdxD),
+
+    length(OldCache,OldCacheN),
+    BlockSize is OldCacheN // SetsNum,
+    (
+        (
+            IdxD mod BlockSize =:= 1,
+            StoppingIndex is (IdxD // BlockSize) + (IdxD mod BlockSize) + 1
+        );
+        (
+            IdxD mod BlockSize =:= 0,
+            StoppingIndex is (IdxD // BlockSize) + (IdxD mod BlockSize)
+        )
+    ),
+    get_subset(OldCache,SubSet,_,_,StoppingIndex,BlockSize),
+    get_data_from_subset(SubSet,Tag,Data).
+
+get_data_from_subset([item(tag(TagF),data(Data),1,_)|_],Tag,Data) :-
+
+    atom_number(TagF,Tag).
+
+
+get_data_from_subset([item(tag(TagF),data(ItemData),1,_)|T],Tag,Data) :-
+
+    ItemData \= Data,
+    get_data_from_subset(T,Tag,Data).
+
+
+
+
+
+
+
+
+
+
+convertAddress(Bin,SetsNum,Tag,Idx,setAssoc) :-
+
+    logBase2(SetsNum,BitsNum),
+    convertAddress(Bin,BitsNum,Tag,Idx,directMap).
+
+replaceInCache(Tag,Idx,Mem,[item(tag(Tag1),D,I,O)|T],NewCache,ItemData,setAssoc,SetsNum) :-
+
+    
+    
+    atom_length(Idx,IdxN),
+    atom_length(Tag,TagN),
+    atom_length(Tag1,Tag1N),
+    logBase2(SetsNum,BitsNum),
+    IF is BitsNum - IdxN,
+    fillZeros(Idx,IF,IdxF),
+    
+    TF is Tag1N - TagN,
+    fillZeros(Tag,TF,TagF),
+
+    convertBinToDec(Idx,IdxD),
+    string_concat(TagF,IdxF,AddressBin),
+    convertBinToDec(AddressBin,AddressDec),
+    atom_number(AddressBin,AddressBinN),
+    nth0(AddressDec,Mem,ItemData),
+
+    length([item(tag(Tag1),D,I,O)|T],OldCacheN),
+    BlockSize is OldCacheN // SetsNum,
+    (
+        (
+            IdxD mod BlockSize =:= 1,
+            StoppingIndex is (IdxD // BlockSize) + (IdxD mod BlockSize) + 1
+        );
+        (
+            IdxD mod BlockSize =:= 0,
+            StoppingIndex is (IdxD // BlockSize) + (IdxD mod BlockSize)
+        )
+    ),
+
+    get_subset([item(tag(Tag1),D,I,O)|T],SubSet,Before,After,StoppingIndex,BlockSize),
+
+    replaceInCache(AddressBinN,Idx,Mem,SubSet,NewSubCache,ItemData,fullyAssoc,BitsNum),
+
+    append(Before,NewSubCache,NewCache1),
+    append(NewCache1,After,NewCache).
+
+get_subset(Cache,SubSet,[],After,0,BS) :-
+    get_block(Cache,SubSet,After,BS).    
+
+get_subset([H|T],SubSet,[H|BT],After,Idx,BS) :-
+    Idx > 0,
+    Idx1 is Idx - 1,
+    get_subset(T,SubSet,BT,After,Idx1,BS).
+
+
+get_block(Cache,[],Cache,0).
+get_block([H|T],[H|ST],After,BS) :-
+
+    BS > 0,
+    BS1 is BS - 1,
+    get_block(T,ST,After,BS1).
+
+% ------------------------------SET ASSOCIATIVE-----------------------------------------------
+
+
+
+
+
+% ------------------------------MAIN----------------------------------------------------------
+
 
 getData(StringAddress,OldCache,Mem,NewCache,Data,HopsNum,Type,BitsNum,hit) :-
     getDataFromCache(StringAddress,OldCache,Data,HopsNum,Type,BitsNum),
@@ -282,3 +395,5 @@ runProgram([Address|AdressList],OldCache,Mem,FinalCache,[Data|OutputDataList],[S
     ),
     getData(Address,OldCache,Mem,NewCache,Data,HopsNum,Type,Num,Status),
     runProgram(AdressList,NewCache,Mem,FinalCache,OutputDataList,StatusList,Type,NumOfSets).
+
+% ------------------------------MAIN----------------------------------------------------------
