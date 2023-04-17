@@ -153,6 +153,111 @@ replaceInCacheHelper(Tag,Idx,[HOC|TOC],[HOC|TNC],ItemData,directMap) :-
 
 % ------------------------------DIRECT MAPPING-----------------------------------------------
 
+
+
+% ------------------------------FULLY ASSOCIATIVE-----------------------------------------------
+
+
+getDataFromCache(StringAddress,[item(tag(StringAddress1),data(Data),1,_)|_],Data,0,fullyAssoc,_):-
+    atom_number(StringAddress,StringAddressI),
+    atom_number(StringAddress1,StringAddressI).
+
+getDataFromCache(StringAddress,[item(tag(StringAddress1),_,_,_)|T],Data,HopsNum,fullyAssoc,_):-
+    atom_number(StringAddress,StringAddressI),
+    atom_number(StringAddress1,StringAddressI1),
+    StringAddressI \= StringAddressI1,
+    getDataFromCache(StringAddress,T,Data,HopsNum1,fullyAssoc,_),
+    HopsNum is HopsNum1 + 1.
+
+
+
+convertAddress(Bin,_,Bin,_,fullyAssoc).
+
+
+replaceInCache(Tag,_,Mem,OldCache,NewCache,ItemData,fullyAssoc,_) :- 
+
+    if_invalid(OldCache),
+    convertBinToDec(Tag,AddressDec),
+    nth0(AddressDec,Mem,ItemData),
+    replaceInCacheInInvalid(Tag,OldCache,NewCache1,ItemData),
+    adjust_orders(NewCache1,ItemData,NewCache).
+
+replaceInCache(Tag,_,Mem,[item(Ta,D,I,O)|T],NewCache,ItemData,fullyAssoc,_) :- 
+
+    \+if_invalid([item(Ta,D,I,O)|T]),
+    convertBinToDec(Tag,AddressDec),
+    nth0(AddressDec,Mem,ItemData),
+    get_min(T,Min,O),
+    replaceInCacheInMin(Tag,[item(Ta,D,I,O)|T],NewCache1,ItemData,Min),
+    adjust_orders(NewCache1,ItemData,NewCache).
+
+
+
+replaceInCacheInInvalid(Tag,[item(tag(Tag1),_,0,O)|T],[item(tag(TagF),data(ItemData),1,0)|T],ItemData) :- 
+    atom_length(Tag,TagN),
+    atom_length(Tag1,Tag1N),
+    TF is Tag1N - TagN,
+    fillZeros(Tag,TF,TagF).
+
+replaceInCacheInInvalid(Tag,[item(Ta,D,1,O)|TOC],[item(Ta,D,1,O)|TNC],ItemData) :-
+
+    replaceInCacheInInvalid(Tag,TOC,TNC,ItemData).
+
+
+replaceInCacheInMin(Tag,[item(tag(Tag1),_,_,Min)|T],[item(tag(TagF),data(ItemData),1,0)|T],ItemData,Min) :-
+
+    atom_length(Tag,TagN),
+    atom_length(Tag1,Tag1N),
+    TF is Tag1N - TagN,
+    fillZeros(Tag,TF,TagF).
+
+replaceInCacheInMin(Tag,[item(Ta,D,I,O)|TOC],[item(Ta,D,I,O)|TNC],ItemData,Min) :-
+
+    Min \= O,
+    replaceInCacheInMin(Tag,TOC,TNC,ItemData,Min).
+
+
+
+
+
+if_invalid([item(_,_,0,_)|_]).
+if_invalid([item(_,_,1,_)|T]) :- if_invalid(T).
+
+% Supposed to be max not min
+
+get_min([],Min,Min).
+get_min([item(_,_,_,O)|T],Min,MinSoFar) :-
+
+    O > MinSoFar,
+    get_min(T,Min,O).
+get_min([item(_,_,_,O)|T],Min,MinSoFar) :-
+
+    O =< MinSoFar,
+    get_min(T,Min,MinSoFar).
+
+
+adjust_orders([],_,[]).
+adjust_orders([item(Ta,data(ItemData),1,O)|TC],ItemData,[item(Ta,data(ItemData),1,O)|TNC]) :-
+
+    adjust_orders(TC,ItemData,TNC).
+
+adjust_orders([item(Ta,data(Data),1,O)|TC],ItemData,[item(Ta,data(Data),1,O1)|TNC]) :-
+
+    Data \= ItemData,
+    O1 is O + 1,
+    adjust_orders(TC,ItemData,TNC).
+adjust_orders([item(Ta,data(Data),0,O)|TC],ItemData,[item(Ta,data(Data),0,O)|TNC]) :-
+
+    Data \= ItemData,
+    
+    adjust_orders(TC,ItemData,TNC).
+
+
+
+
+% ------------------------------FULLY ASSOCIATIVE-----------------------------------------------
+
+
 getData(StringAddress,OldCache,Mem,NewCache,Data,HopsNum,Type,BitsNum,hit) :-
     getDataFromCache(StringAddress,OldCache,Data,HopsNum,Type,BitsNum),
     NewCache = OldCache.
